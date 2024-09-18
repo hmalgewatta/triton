@@ -35,8 +35,6 @@ include "mlir/Interfaces/SideEffectInterfaces.td" // Pure
 include "mlir/Interfaces/InferTypeOpInterface.td" // SameOperandsAndResultType
 include "mlir/Interfaces/ViewLikeInterface.td"
 
-// def OperandAndResultHaveSameEncoding: NativeOpTrait<"OperandAndResultHaveSameEncoding">;
-
 class TTAmdgpu_Op<string mnemonic, list<Trait> traits = []> :
     Op<AMDGPU_Dialect, mnemonic, traits>;
 
@@ -66,8 +64,8 @@ def TTAmdgpu_ViewSliceOp : TTAmdgpu_Op<"view_slice",
   let results = (outs AnyRankedTensor:$result);
 
   let builders = [
-    // Build an ExtractSliceOp with mixed static and dynamic entries and custom
-    // result type. If the type passed is nullptr, it is inferred.
+    // Build a ViewSliceOp with mixed static and dynamic entries and the same
+    // result type
     OpBuilder<(ins "RankedTensorType":$resultType, "Value":$source,
       "ArrayRef<OpFoldResult>":$offsets, "ArrayRef<OpFoldResult>":$sizes,
       "ArrayRef<OpFoldResult>":$strides,
@@ -78,11 +76,6 @@ def TTAmdgpu_ViewSliceOp : TTAmdgpu_Op<"view_slice",
     /// Return the number of leading operands before the `offsets`, `sizes` and
     /// and `strides` operands.
     static unsigned getOffsetSizeAndStrideStartOperandIndex() { return 1; }
-
-    /// Returns the type of the base tensor operand.
-    // RankedTensorType getSourceType() {
-    //   return mlir::cast<RankedTensorType>(getSource());
-    // }
 
     std::array<unsigned, 3> getArrayAttrMaxRanks() {
       unsigned rank = getSource().getType().getRank();
