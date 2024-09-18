@@ -1,7 +1,7 @@
-#include "TritonAMDGPUToLLVM/Passes.h"
-
+#include "Dialect/AMDGPU/IR/Dialect.h"
 #include "PatternTritonGPUOpToLLVM.h"
 #include "TargetInfo.h"
+#include "TritonAMDGPUToLLVM/Passes.h"
 #include "mlir/Conversion/ArithToLLVM/ArithToLLVM.h"
 #include "mlir/Conversion/ControlFlowToLLVM/ControlFlowToLLVM.h"
 #include "mlir/Conversion/GPUToNVVM/GPUToNVVMPass.h"
@@ -52,6 +52,7 @@ public:
     addLegalDialect<LLVM::LLVMDialect>();
     addLegalDialect<ROCDL::ROCDLDialect>();
     addLegalDialect<mlir::scf::SCFDialect>();
+    addLegalDialect<mlir::triton::amdgpu::AMDGPUDialect>();
     addIllegalDialect<triton::TritonDialect>();
     addIllegalDialect<triton::gpu::TritonGPUDialect>();
     addIllegalDialect<triton::nvidia_gpu::TritonNvidiaGPUDialect>();
@@ -69,8 +70,8 @@ struct ConvertTritonAMDGPUToLLVM
   }
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<LLVM::LLVMDialect, NVVM::NVVMDialect,
-                    mlir::ROCDL::ROCDLDialect>();
+    registry.insert<mlir::triton::amdgpu::AMDGPUDialect, LLVM::LLVMDialect,
+                    NVVM::NVVMDialect, mlir::ROCDL::ROCDLDialect>();
   }
 
   void runOnOperation() override {
