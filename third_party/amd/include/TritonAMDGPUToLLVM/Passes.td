@@ -25,6 +25,27 @@ def OptimizeAMDLDSUsage : Pass<"optimize-amd-lds-usage", "mlir::ModuleOp"> {
     ];
 }
 
+def TritonAMDGPUDotSlicing: Pass<"triton-amdgpu-dot-slicing", "mlir::ModuleOp"> {
+  let summary = "'DotOp' instruction slicing";
+
+  let description = [{
+    Slice 'DotOp' instruction into multiple smaller 'DotOp' instructions
+    in order to improve scheduling and latency hiding.
+  }];
+
+  let constructor = "mlir::triton::AMD::createTritonAMDGPUDotSlicingPass()";
+
+  let dependentDialects = ["mlir::triton::gpu::TritonGPUDialect",
+                           "mlir::triton::amdgpu::TritonAMDGPUDialect",
+                           "mlir::arith::ArithDialect"];
+
+  let options = [
+    Option<"sliceKTile", "slice-k-tile",
+           "int32_t", /*default*/"0",
+           "slice size in k dimension">
+  ];
+}
+
 def ConvertTritonAMDGPUToLLVM : Pass<"convert-triton-amdgpu-to-llvm", "mlir::ModuleOp"> {
     let summary = "Convert TritonGPU to LLVM";
     let constructor = "mlir::triton::createConvertTritonAMDGPUToLLVMPass(\"\", /*ftz=*/true)";

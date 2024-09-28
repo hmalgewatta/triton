@@ -29,6 +29,12 @@ createDecomposeUnsupportedConversionsPass(StringRef targetArch);
 /// @return created pass
 std::unique_ptr<OperationPass<ModuleOp>>
 createOptimizeLDSUsagePass(StringRef arch, int32_t customLDSLimit = 0);
+
+/// @brief Creates a pass that allows sub view of a tile in registers.
+/// @param sliceKTile defines size of sub-tile along k dimension
+/// zero value tells pass no sub-tiling is performed
+/// @return created pass
+std::unique_ptr<OperationPass<ModuleOp>> createTritonAMDGPUDotSlicingPass(int sliceKTile = 0);
 } // namespace AMD
 
 std::unique_ptr<OperationPass<ModuleOp>>
