@@ -168,12 +168,22 @@ struct TritonAMDGPUDotSlicingPass
       // Convert the operation's results to sliced types.
       for (auto [currRes, slicedRes] :
            llvm::zip(currOp->getResults(), slicedOp->getResults())) {
-        auto result
+            llvm::outs() << "Type: " << currRes.getType() << ":" << slicedRes.getType() << ":" << viewPtr.getType() << "\n";
+            if (auto memdescTy = dyn_cast<triton::MemDescType>(currRes.getType())) {
+              auto slicedType = triton::MemDescType::get(
+                viewPtr.getType().getShape(),
+                memdescTy.getElementType(),
+                memdescTy.getEncoding(),
+                memdescTy.getMemorySpace(),
+                memdescTy.getMutableMemory()
+              );
+                slicedRes.setType(slicedType);
+            } else {
         auto slicedType = RankedTensorType::get(
             cast<RankedTensorType>(viewPtr.getType()).getShape(),
             cast<RankedTensorType>(currRes.getType()).getElementType(),
             cast<RankedTensorType>(currRes.getType()).getEncoding());
-        slicedRes.setType(slicedType);
+        slicedRes.setType(slicedType);}
       }
 
       mapping.map(currOp, slicedOp);
@@ -388,8 +398,9 @@ struct TritonAMDGPUDotSlicingPass
   bool dependsOnPreviousDot(tt::DotOp dotOp, int operandIdx) {
     SetVector<Operation *> bwdSlices;
     SmallVector<Operation *> filteredSlices;
-    // BackwardSliceOptions opt;
-    // opt.omitBlockArguments = true;
+    BackwardSliceOptions opt;
+    opt.omitBlockArguments = true;
+    // opt.includsive = false;
     // TODO(jlebar): Is this filter redundant with omitBlockArguments == true?
     // That is, is it possible to get into a different region without going
     // through a block argument?
@@ -400,7 +411,8 @@ struct TritonAMDGPUDotSlicingPass
     // getBackwardSlice(operand, &bwdSlices, opt);
     // Seems like getBackwardSlice(dotOp, bwdSlices, filter) doesn't work
     // properly. Do it manually.
-    getBackwardSlice(operand, &bwdSlices);
+    llvm::outs() << "Operation:->" << operand->getName() << "\n";
+    getBackwardSlice(operand, &bwdSlices, opt);
     std::copy_if(bwdSlices.begin(), bwdSlices.end(),
                  std::back_inserter(filteredSlices),
                  [](Operation *op) { return isa<tt::DotOp>(op); });
