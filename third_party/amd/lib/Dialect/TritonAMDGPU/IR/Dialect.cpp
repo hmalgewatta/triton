@@ -23,6 +23,7 @@
 
 #include "mlir/IR/DialectImplementation.h"
 #include "mlir/IR/OpImplementation.h"
+#include "triton/Conversion/TritonGPUToLLVM/Utility.h"
 
 // clang-format off
 #include "Dialect/TritonAMDGPU/IR/Dialect.h"
@@ -46,3 +47,59 @@ void mlir::triton::amdgpu::TritonAMDGPUDialect::initialize() {
 
 #define GET_OP_CLASSES
 #include "Dialect/TritonAMDGPU/IR/Ops.cpp.inc"
+
+namespace mlir::triton::amdgpu {
+
+LogicalResult ViewSliceOp::verify() {
+  auto srcTy = getSource().getType();
+  auto srcLayout = srcTy.getEncoding();
+  auto srcElementType = getElementTypeOrSelf(srcTy);
+  auto resultTy = getResult().getType();
+  auto resultLayout = resultTy.getEncoding();
+  auto resultElementType = getElementTypeOrSelf(resultTy);
+
+  if (srcElementType != resultElementType) {
+    return emitError("result element type must match source element type");
+  }
+  if (srcLayout != resultLayout) {
+    return emitError("result layout must match source layout");
+  }
+  if (srcTy.getRank() != resultTy.getRank()) {
+    return emitError("result rank must be equal to source rank");
+  }
+  if (srcTy.getRank() != 2) {
+    return emitError("currently only 2D tensors are supported");
+  }
+
+  auto srcShape = srcTy.getShape();
+  auto shapePerCTA = mlir::triton::gpu::getShapePerCTATile(srcLayout, srcShape);
+  shapePerCTA[0] = std::min(static_cast<unsigned>(srcShape[0]), shapePerCTA[0]);
+  shapePerCTA[1] = std::min(static_cast<unsigned>(srcShape[1]), shapePerCTA[1]);
+
+  auto offsets = getStaticOffsets();
+  auto sizes = getStaticSizes();
+
+  // ViewSlice only supports slicing where offsets and sizes are multiples of
+  // shapePerCTA. This condition ensures that slice has the same layout as the
+  // original tensor.
+
+  if (offsets[0] % shapePerCTA[0] != 0 || offsets[1] % shapePerCTA[1] != 0) {
+    return emitError() << "offset [" << offsets
+                       << "] must be a multiple of shapePerCTA [" << shapePerCTA
+                       << "]";
+  }
+
+  if (sizes[0] % shapePerCTA[0] != 0 || sizes[1] % shapePerCTA[1] != 0) {
+    return emitError() << "sizes [" << sizes
+                       << "] must be a multiple of shapePerCTA [" << shapePerCTA
+                       << "]";
+  }
+
+  if (!hasUnitStride()) {
+    return emitError("expected unit strides but found unsupported stride [")
+           << getStaticStrides() << "]";
+  }
+
+  return success();
+}
+} // namespace mlir::triton::amdgpu
