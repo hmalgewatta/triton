@@ -77,6 +77,10 @@ LogicalResult ViewSliceOp::verify() {
   // ViewSlice only supports slicing where offsets and sizes are multiples of
   // shapePerCTA. This condition ensures that slice has the same layout as the
   // original tensor.
+  // llvm::outs() << "src " << srcShape[0] << "," <<  srcShape[1] << "\n";
+  // llvm::outs() << "shapePerCTA " << shapePerCTA[0] << "," <<  shapePerCTA[1] << "\n";
+  // llvm::outs() << "offsets " << offsets[0] << "," <<  offsets[1] << "\n";
+  // llvm::outs() << "sizes " << sizes[0] << "," <<  sizes[1] << "\n";
 
   if (offsets[0] % shapePerCTA[0] != 0 || offsets[1] % shapePerCTA[1] != 0) {
     return emitError("incorrect static offset");

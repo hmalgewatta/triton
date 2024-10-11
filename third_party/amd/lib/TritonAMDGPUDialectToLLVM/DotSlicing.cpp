@@ -168,7 +168,7 @@ struct TritonAMDGPUDotSlicingPass
       // Convert the operation's results to sliced types.
       for (auto [currRes, slicedRes] :
            llvm::zip(currOp->getResults(), slicedOp->getResults())) {
-            llvm::outs() << "Type: " << currRes.getType() << ":" << slicedRes.getType() << ":" << viewPtr.getType() << "\n";
+            // llvm::outs() << "Type: " << currRes.getType() << ":" << slicedRes.getType() << ":" << viewPtr.getType() << "\n";
             if (auto memdescTy = dyn_cast<triton::MemDescType>(currRes.getType())) {
               auto slicedType = triton::MemDescType::get(
                 viewPtr.getType().getShape(),
@@ -190,7 +190,7 @@ struct TritonAMDGPUDotSlicingPass
       if (currOp == dotOperand.getDefiningOp()) {
         break;
       }
-      llvm::outs() << currOp->getName() << "\n";
+      // llvm::outs() << currOp->getName() << "\n";
       assert(llvm::isa<tt::LoadOp>(currOp) ||
              llvm::isa<ttg::ConvertLayoutOp>(currOp) ||
              llvm::isa<ttg::LocalAllocOp>(currOp) ||
@@ -230,7 +230,7 @@ struct TritonAMDGPUDotSlicingPass
       currOp = currOpUser;
     }
 
-      llvm::outs() << "converted " << slicedOp->getName() << "\n";
+      // llvm::outs() << "converted " << slicedOp->getName() << "\n";
     assert(llvm::isa<ttg::ConvertLayoutOp>(slicedOp) || llvm::isa<ttg::LocalLoadOp>(slicedOp));
     return slicedOp->getResults()[0];
   }
@@ -335,7 +335,6 @@ struct TritonAMDGPUDotSlicingPass
       SmallVector<unsigned> newWarpsPerCTA(2, warpsPerCTA[0] * warpsPerCTA[1]);
       newWarpsPerCTA[1 - operandIdx] = 1;
       SmallVector<unsigned> newThreadsPerWarp(2, 1);
-      llvm::outs() << this->sliceKTile << ":" << threadsPerWarp[0] << ":" << threadsPerWarp[1] << ":" <<  sizePerThread[1-operandIdx] ;
       newThreadsPerWarp[operandIdx] =
           (threadsPerWarp[0] * threadsPerWarp[1]) /
           (this->sliceKTile / sizePerThread[1 - operandIdx]);
@@ -411,7 +410,7 @@ struct TritonAMDGPUDotSlicingPass
     // getBackwardSlice(operand, &bwdSlices, opt);
     // Seems like getBackwardSlice(dotOp, bwdSlices, filter) doesn't work
     // properly. Do it manually.
-    llvm::outs() << "Operation:->" << operand->getName() << "\n";
+    // llvm::outs() << "Operation:->" << operand->getName() << "\n";
     getBackwardSlice(operand, &bwdSlices, opt);
     std::copy_if(bwdSlices.begin(), bwdSlices.end(),
                  std::back_inserter(filteredSlices),

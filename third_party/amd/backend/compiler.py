@@ -45,6 +45,7 @@ class HIPOptions:
     allow_flush_denorm: bool = False
     max_num_imprecise_acc_default: int = 0
     backend_name: str = 'hip'
+    tile_k_size: int = 0
 
     def __post_init__(self):
         default_libdir = Path(__file__).parent / 'lib'
@@ -160,6 +161,7 @@ class HIPBackend(BaseBackend):
         amd.passes.ttgpuir.add_accelerate_matmul(pm, options.arch, options.matrix_instr_nonkdim, options.kpack)
         passes.ttgpuir.add_remove_layout_conversions(pm)
         amd.passes.ttgpuir.add_optimize_epilogue(pm)
+        amd.passes.ttgpuir.add_dot_slicing_pass(pm, options.tile_k_size)
         passes.ttgpuir.add_optimize_dot_operands(pm, True)
         use_new_pipeliner = os.getenv("TRITON_HIP_USE_NEW_STREAM_PIPELINE", "0") == "1"
         if amd.has_matrix_core_feature(options.arch):

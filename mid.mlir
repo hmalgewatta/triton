@@ -13,7 +13,7 @@ module attributes {"triton_gpu.num-ctas" = 1 : i32, "triton_gpu.num-warps" = 8 :
     %c0_i32 = arith.constant 0 : i32
     %c127_i32 = arith.constant 127 : i32
     %c31_i32 = arith.constant 31 : i32
-    %cst_1 = arith.constant dense<0.000000e+00> : tensor<128x128xf32, #mma>
+    %cst_1 = arith.constant dense<0.000000e+00> : tensor<128x128xf16, #mma>
     %0 = tt.get_program_id x : i32
     %1 = arith.addi %arg3, %c127_i32 : i32
     %2 = arith.divsi %1, %c128_i32 : i32
@@ -82,8 +82,8 @@ module attributes {"triton_gpu.num-ctas" = 1 : i32, "triton_gpu.num-warps" = 8 :
     %65 = tt.addptr %38, %c32_i32 : !tt.ptr<f16>, i32
     %66 = tt.addptr %47, %50 : !tt.ptr<f16>, i32
     %67 = arith.subi %49, %c1_i32 : i32
-    cf.br ^bb1(%c0_i32, %cst_1, %65, %66 : i32, tensor<128x128xf32, #mma>, !tt.ptr<f16>, !tt.ptr<f16>)
-  ^bb1(%68: i32, %69: tensor<128x128xf32, #mma>, %70: !tt.ptr<f16>, %71: !tt.ptr<f16>):  // 2 preds: ^bb0, ^bb2
+    cf.br ^bb1(%c0_i32, %cst_1, %65, %66 : i32, tensor<128x128xf16, #mma>, !tt.ptr<f16>, !tt.ptr<f16>)
+  ^bb1(%68: i32, %69: tensor<128x128xf16, #mma>, %70: !tt.ptr<f16>, %71: !tt.ptr<f16>):  // 2 preds: ^bb0, ^bb2
     %72 = arith.cmpi slt, %68, %67 : i32
     cf.cond_br %72, ^bb2, ^bb3
   ^bb2:  // pred: ^bb1
@@ -104,13 +104,13 @@ module attributes {"triton_gpu.num-ctas" = 1 : i32, "triton_gpu.num-warps" = 8 :
     %87 = tt.load %86, %84, %cst_0 : tensor<128x128x!tt.ptr<f16>, #blocked1>
     %88 = triton_gpu.local_load %57 : !tt.memdesc<128x128xf16, #shared, #triton_gpu.shared_memory, mutable> -> tensor<128x128xf16, #triton_gpu.dot_op<{opIdx = 0, parent = #mma, kWidth = 4}>>
     %89 = triton_gpu.local_load %64 : !tt.memdesc<128x128xf16, #shared1, #triton_gpu.shared_memory, mutable> -> tensor<128x128xf16, #triton_gpu.dot_op<{opIdx = 1, parent = #mma, kWidth = 4}>>
-    %90 = tt.dot %88, %89, %69 : tensor<128x128xf16, #triton_gpu.dot_op<{opIdx = 0, parent = #mma, kWidth = 4}>> * tensor<128x128xf16, #triton_gpu.dot_op<{opIdx = 1, parent = #mma, kWidth = 4}>> -> tensor<128x128xf32, #mma>
+    %90 = tt.dot %88, %89, %69 : tensor<128x128xf16, #triton_gpu.dot_op<{opIdx = 0, parent = #mma, kWidth = 4}>> * tensor<128x128xf16, #triton_gpu.dot_op<{opIdx = 1, parent = #mma, kWidth = 4}>> -> tensor<128x128xf16, #mma>
     %91 = tt.addptr %70, %c32_i32 : !tt.ptr<f16>, i32
     %92 = tt.addptr %71, %50 : !tt.ptr<f16>, i32
     triton_gpu.local_store %81, %57 : tensor<128x128xf16, #blocked> -> !tt.memdesc<128x128xf16, #shared, #triton_gpu.shared_memory, mutable>
     triton_gpu.local_store %87, %64 : tensor<128x128xf16, #blocked1> -> !tt.memdesc<128x128xf16, #shared1, #triton_gpu.shared_memory, mutable>
     %93 = arith.addi %68, %c1_i32 : i32
-    cf.br ^bb1(%93, %90, %91, %92 : i32, tensor<128x128xf32, #mma>, !tt.ptr<f16>, !tt.ptr<f16>)
+    cf.br ^bb1(%93, %90, %91, %92 : i32, tensor<128x128xf16, #mma>, !tt.ptr<f16>, !tt.ptr<f16>)
   ^bb3:  // pred: ^bb1
     tt.return
   }
