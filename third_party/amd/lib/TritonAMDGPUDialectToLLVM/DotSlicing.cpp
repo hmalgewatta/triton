@@ -20,7 +20,7 @@
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
- 
+
 // #include "TargetInfo.h"
 #include "TritonAMDGPUToLLVM/Passes.h"
 // #include "mlir/Analysis/Liveness.h"
@@ -30,15 +30,13 @@
 // #include "triton/Dialect/TritonGPU/IR/Attributes.h"
 // #include "triton/Dialect/TritonGPU/IR/Dialect.h"
 
+#include "Dialect/TritonAMDGPU/IR/Dialect.h"
 #include "triton/Analysis/Allocation.h"
 #include "triton/Conversion/TritonGPUToLLVM/Patterns.h"
 #include "triton/Dialect/Triton/IR/Utility.h"
 #include "triton/Dialect/TritonGPU/IR/Attributes.h"
 #include "triton/Dialect/TritonGPU/IR/Dialect.h"
-#include "Dialect/TritonAMDGPU/IR/Dialect.h"
 #include "llvm/Support/MathExtras.h"
-
-
 
 using namespace mlir;
 namespace tt = triton;
@@ -84,7 +82,8 @@ bool isElementwiseOp(Operation *op) {
 }
 
 struct TritonAMDGPUDotSlicingPass
-    : public mlir::triton::impl::TritonAMDGPUDotSlicingBase<TritonAMDGPUDotSlicingPass> {
+    : public mlir::triton::impl::TritonAMDGPUDotSlicingBase<
+          TritonAMDGPUDotSlicingPass> {
   TritonAMDGPUDotSlicingPass() = default;
 
   TritonAMDGPUDotSlicingPass(int sliceKTile) { this->sliceKTile = sliceKTile; }
@@ -168,22 +167,21 @@ struct TritonAMDGPUDotSlicingPass
       // Convert the operation's results to sliced types.
       for (auto [currRes, slicedRes] :
            llvm::zip(currOp->getResults(), slicedOp->getResults())) {
-            // llvm::outs() << "Type: " << currRes.getType() << ":" << slicedRes.getType() << ":" << viewPtr.getType() << "\n";
-            if (auto memdescTy = dyn_cast<triton::MemDescType>(currRes.getType())) {
-              auto slicedType = triton::MemDescType::get(
-                viewPtr.getType().getShape(),
-                memdescTy.getElementType(),
-                memdescTy.getEncoding(),
-                memdescTy.getMemorySpace(),
-                memdescTy.getMutableMemory()
-              );
-                slicedRes.setType(slicedType);
-            } else {
-        auto slicedType = RankedTensorType::get(
-            cast<RankedTensorType>(viewPtr.getType()).getShape(),
-            cast<RankedTensorType>(currRes.getType()).getElementType(),
-            cast<RankedTensorType>(currRes.getType()).getEncoding());
-        slicedRes.setType(slicedType);}
+        // llvm::outs() << "Type: " << currRes.getType() << ":" <<
+        // slicedRes.getType() << ":" << viewPtr.getType() << "\n";
+        if (auto memdescTy = dyn_cast<triton::MemDescType>(currRes.getType())) {
+          auto slicedType = triton::MemDescType::get(
+              viewPtr.getType().getShape(), memdescTy.getElementType(),
+              memdescTy.getEncoding(), memdescTy.getMemorySpace(),
+              memdescTy.getMutableMemory());
+          slicedRes.setType(slicedType);
+        } else {
+          auto slicedType = RankedTensorType::get(
+              cast<RankedTensorType>(viewPtr.getType()).getShape(),
+              cast<RankedTensorType>(currRes.getType()).getElementType(),
+              cast<RankedTensorType>(currRes.getType()).getEncoding());
+          slicedRes.setType(slicedType);
+        }
       }
 
       mapping.map(currOp, slicedOp);
@@ -193,8 +191,7 @@ struct TritonAMDGPUDotSlicingPass
       // llvm::outs() << currOp->getName() << "\n";
       assert(llvm::isa<tt::LoadOp>(currOp) ||
              llvm::isa<ttg::ConvertLayoutOp>(currOp) ||
-             llvm::isa<ttg::LocalAllocOp>(currOp) ||
-             isElementwiseOp(currOp));
+             llvm::isa<ttg::LocalAllocOp>(currOp) || isElementwiseOp(currOp));
 
       // If currOp has more then one user, proceed with the one that is "on a
       // path" of dot operand calculation. We expect there is only one such
@@ -213,8 +210,8 @@ struct TritonAMDGPUDotSlicingPass
         if (nonSlicedOperand == currOp) {
           continue;
         }
-        auto nonSlicedOperandTy = cast<TensorOrMemDesc>(nonSlicedOperand->getResults()[0]
-                                      .getType());
+        auto nonSlicedOperandTy =
+            cast<TensorOrMemDesc>(nonSlicedOperand->getResults()[0].getType());
 
         auto slicedTy = RankedTensorType::get(
             sliceSizes, nonSlicedOperandTy.getElementType(),
@@ -230,8 +227,9 @@ struct TritonAMDGPUDotSlicingPass
       currOp = currOpUser;
     }
 
-      // llvm::outs() << "converted " << slicedOp->getName() << "\n";
-    assert(llvm::isa<ttg::ConvertLayoutOp>(slicedOp) || llvm::isa<ttg::LocalLoadOp>(slicedOp));
+    // llvm::outs() << "converted " << slicedOp->getName() << "\n";
+    assert(llvm::isa<ttg::ConvertLayoutOp>(slicedOp) ||
+           llvm::isa<ttg::LocalLoadOp>(slicedOp));
     return slicedOp->getResults()[0];
   }
 
@@ -349,7 +347,7 @@ struct TritonAMDGPUDotSlicingPass
       // which can affect coalescing and thus potentially decrease performance.
     } else {
       assert(false && "Unexpected layout in DotSlicing pass.");
-    } 
+    }
     return true;
   }
 
@@ -363,7 +361,8 @@ struct TritonAMDGPUDotSlicingPass
     if (auto blockedEncoding = dyn_cast<ttg::BlockedEncodingAttr>(encoding)) {
       return setBlockedLayout(firstOpToSlice, srcShape, blockedEncoding,
                               operandIdx);
-    } else if (auto mfmaEncoding = dyn_cast<ttg::AMDMfmaEncodingAttr>(encoding)) {
+    } else if (auto mfmaEncoding =
+                   dyn_cast<ttg::AMDMfmaEncodingAttr>(encoding)) {
       auto shapePerCTA = ttg::getShapePerCTATile(mfmaEncoding, srcShape);
       // TODO: Implement changing of mfma layout in case it is not suitable for
       // slicing (similar as in setBlockedLayout).
@@ -424,6 +423,22 @@ struct TritonAMDGPUDotSlicingPass
     return true;
   }
 
+  bool dependsOnSplat(tt::DotOp dotOp, int operandIdx) {
+    SetVector<Operation *> bwdSlices;
+    SmallVector<Operation *> filteredSlices;
+    BackwardSliceOptions opt;
+    opt.omitBlockArguments = true;
+    Operation *operand = dotOp.getOperand(operandIdx).getDefiningOp();
+    getBackwardSlice(operand, &bwdSlices, opt);
+    std::copy_if(bwdSlices.begin(), bwdSlices.end(),
+                 std::back_inserter(filteredSlices),
+                 [](Operation *op) { return isa<tt::SplatOp>(op); });
+    if (filteredSlices.empty()) {
+      return false;
+    }
+    return true;
+  }
+
   bool shouldSliceDot(tt::DotOp dotOp) {
     auto dotOperand = dotOp.getOperand(0);
     auto dotATy = cast<TensorOrMemDesc>(dotOperand.getType());
@@ -453,6 +468,8 @@ struct TritonAMDGPUDotSlicingPass
 
   Operation *getFirstOpToSlice(tt::DotOp dotOp, int operandIdx) {
     if (dependsOnPreviousDot(dotOp, operandIdx)) {
+      return dotOp.getOperand(operandIdx).getDefiningOp();
+    } else if (dependsOnSplat(dotOp, operandIdx)) {
       return dotOp.getOperand(operandIdx).getDefiningOp();
     }
     return getLoadInst(dotOp, operandIdx);
@@ -505,6 +522,7 @@ struct TritonAMDGPUDotSlicingPass
 };
 } // anonymous namespace
 
-std::unique_ptr<OperationPass<ModuleOp>> mlir::triton::AMD::createTritonAMDGPUDotSlicingPass(int sliceKTile) {
+std::unique_ptr<OperationPass<ModuleOp>>
+mlir::triton::AMD::createTritonAMDGPUDotSlicingPass(int sliceKTile) {
   return std::make_unique<TritonAMDGPUDotSlicingPass>(sliceKTile);
 }
