@@ -1,4 +1,5 @@
-﻿#include <pybind11/functional.h>
+#include <optional>
+#include <pybind11/functional.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
@@ -6,9 +7,9 @@
 #include "mlir/Dialect/ControlFlow/IR/ControlFlow.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/Dialect/Index/IR/IndexDialect.h"
-#include "mlir/Dialect/Index/IR/IndexOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Dialect/LLVMIR/Transforms/InlinerInterfaceImpl.h"
+#include "mlir/Dialect/UB/IR/UBOps.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/Diagnostics.h"
@@ -22,12 +23,11 @@
 #include "mlir/Target/LLVMIR/Dialect/Builtin/BuiltinToLLVMIRTranslation.h"
 #include "mlir/Target/LLVMIR/Dialect/LLVMIR/LLVMToLLVMIRTranslation.h"
 #include "mlir/Transforms/LocationSnapshot.h"
-#include "mlir/Transforms/Passes.h"
 
-#include "triton/Analysis/Allocation.h"
 #include "triton/Dialect/Triton/IR/Dialect.h"
 #include "triton/Dialect/Triton/IR/Types.h"
 #include "triton/Dialect/Triton/IR/Utility.h"
+#include "triton/Dialect/TritonGPU/IR/Dialect.h"
 #include "triton/Tools/Sys/GetEnv.hpp"
 #include "llvm/Support/SourceMgr.h"
 
@@ -135,11 +135,6 @@ void outputWarning(Location loc, const std::string &msg) {
                /*stack_level=*/2);
 }
 
-template <typename OpTy> OpTy approxMath(OpTy op) {
-  op.setFastmath(arith::FastMathFlags::afn);
-  return op;
-}
-
 } // anonymous namespace
 
 /*****************************************************************************/
@@ -210,6 +205,14 @@ void init_triton_ir(py::module &&m) {
       .value("IEEE", InputPrecision::IEEE)
       .export_values();
 
+  py::enum_<F8F6F4Type>(m, "F8F6F4TY", py::module_local())
+      .value("E4M3", F8F6F4Type::E4M3)
+      .value("E5M2", F8F6F4Type::E5M2)
+      .value("E2M3", F8F6F4Type::E2M3)
+      .value("E3M2", F8F6F4Type::E3M2)
+      .value("E2M1", F8F6F4Type::E2M1)
+      .export_values();
+
   py::class_<MLIRContext>(m, "context", py::module_local())
       .def(py::init<>())
       .def("printOpOnDiagnostic",
@@ -230,7 +233,8 @@ void init_triton_ir(py::module &&m) {
     registry.insert<TritonDialect, ::mlir::triton::gpu::TritonGPUDialect,
                     math::MathDialect, arith::ArithDialect, index::IndexDialect,
                     scf::SCFDialect, ::mlir::gpu::GPUDialect,
-                    cf::ControlFlowDialect, LLVM::LLVMDialect>();
+                    cf::ControlFlowDialect, LLVM::LLVMDialect,
+                    mlir::ub::UBDialect>();
     mlir::LLVM::registerInlinerInterface(registry);
     registerBuiltinDialectTranslation(registry);
     registerLLVMDialectTranslation(registry);
@@ -561,29 +565,9 @@ void init_triton_ir(py::module &&m) {
       //  .def("has_attr", &::FuncOp::hasAttr)
       .def("finalize",
            [](FuncOp &self) -> void {
-             // Remove dead code
-             // 1. Unreachable code after return
-             self.walk([&](Block *block) {
-               Operation *retOp = nullptr;
-               // It's better to not use walk here because we only want to
-               // check operations in the current block
-               for (auto &op : block->getOperations()) {
-                 if (isa<ReturnOp>(op))
-                   if (retOp == nullptr) {
-                     retOp = &op;
-                     break;
-                   }
-               }
-               if (retOp && retOp != &block->back()) {
-                 auto pos = retOp->getIterator();
-                 pos++;
-                 auto *newBlock = block->splitBlock(pos);
-                 newBlock->erase();
-               }
-             });
-             // 2. Check if the result of tl.advance is used
-             self.walk([&](Operation *op) {
-               if (isa<AdvanceOp>(op) && op->getResult(0).use_empty())
+             // Check if the result of tl.advance is used
+             self.walk([&](AdvanceOp op) {
+               if (op->getResult(0).use_empty())
                  outputWarning(op->getLoc(), "The result of tl.advance is not "
                                              "being used. Note that tl.advance "
                                              "does not have any side effects. "
@@ -1422,19 +1406,13 @@ void init_triton_ir(py::module &&m) {
            [](TritonOpBuilder &self, int axis) -> Value {
              if (axis < 0 || axis > 3)
                throw pybind11::index_error("program_id must be in [0,3]");
-             return self.create<GetProgramIdOp>(
-                 self.getBuilder().getI32Type(),
-                 ProgramIDDimAttr::get(self.getBuilder().getContext(),
-                                       ProgramIDDim(axis)));
+             return self.create<GetProgramIdOp>(axis);
            })
       .def("create_get_num_programs",
            [](TritonOpBuilder &self, int axis) -> Value {
              if (axis < 0 || axis > 3)
                throw pybind11::index_error("program_id must be in [0,3]");
-             return self.create<GetNumProgramsOp>(
-                 self.getBuilder().getI32Type(),
-                 ProgramIDDimAttr::get(self.getBuilder().getContext(),
-                                       ProgramIDDim(axis)));
+             return self.create<GetNumProgramsOp>(axis);
            })
       .def("create_dot",
            [](TritonOpBuilder &self, mlir::Value &a, mlir::Value &b,
@@ -1442,6 +1420,15 @@ void init_triton_ir(py::module &&m) {
               int maxNumImpreciseAcc) -> mlir::Value {
              return self.create<DotOp>(c.getType(), a, b, c, inputPrecision,
                                        maxNumImpreciseAcc);
+           })
+      .def("create_dot_scaled",
+           [](TritonOpBuilder &self, mlir::Value &lhs, mlir::Value &lhs_scale,
+              F8F6F4Type lhs_format, mlir::Value &rhs,
+              std::optional<mlir::Value> &rhs_scale, F8F6F4Type rhs_format,
+              mlir::Value &c) -> mlir::Value {
+             return self.create<DotScaledOp>(
+                 c.getType(), lhs, rhs, c, lhs_scale,
+                 rhs_scale.value_or(Value()), lhs_format, rhs_format);
            })
       .def("create_floor",
            [](TritonOpBuilder &self, Value &val) -> Value {
@@ -1453,27 +1440,27 @@ void init_triton_ir(py::module &&m) {
            })
       .def("create_exp",
            [](TritonOpBuilder &self, Value &val) -> Value {
-             return approxMath(self.create<math::ExpOp>(val));
+             return self.create<math::ExpOp>(val);
            })
       .def("create_exp2",
            [](TritonOpBuilder &self, Value &val) -> Value {
-             return approxMath(self.create<math::Exp2Op>(val));
+             return self.create<math::Exp2Op>(val);
            })
       .def("create_cos",
            [](TritonOpBuilder &self, Value &val) -> Value {
-             return approxMath(self.create<math::CosOp>(val));
+             return self.create<math::CosOp>(val);
            })
       .def("create_sin",
            [](TritonOpBuilder &self, Value &val) -> Value {
-             return approxMath(self.create<math::SinOp>(val));
+             return self.create<math::SinOp>(val);
            })
       .def("create_log",
            [](TritonOpBuilder &self, Value &val) -> Value {
-             return approxMath(self.create<math::LogOp>(val));
+             return self.create<math::LogOp>(val);
            })
       .def("create_log2",
            [](TritonOpBuilder &self, Value &val) -> Value {
-             return approxMath(self.create<math::Log2Op>(val));
+             return self.create<math::Log2Op>(val);
            })
       .def("create_erf",
            [](TritonOpBuilder &self, Value &val) -> Value {
@@ -1551,26 +1538,18 @@ void init_triton_ir(py::module &&m) {
            })
       .def("create_assert",
            [](TritonOpBuilder &self, Value &condition,
-              const std::string &message, const std::string &fileName,
-              const std::string &funcName, unsigned lineNo) -> void {
+              const std::string &message) -> void {
              auto messageAttr = StringAttr::get(self.getBuilder().getContext(),
                                                 llvm::StringRef(message));
-             auto fileNameAttr = StringAttr::get(self.getBuilder().getContext(),
-                                                 llvm::StringRef(fileName));
-             auto funcNameAttr = StringAttr::get(self.getBuilder().getContext(),
-                                                 llvm::StringRef(funcName));
-             auto lineNoAttr = self.getBuilder().getI32IntegerAttr(lineNo);
-             self.create<AssertOp>(condition, messageAttr, fileNameAttr,
-                                   funcNameAttr, lineNoAttr);
+             self.create<AssertOp>(condition, messageAttr);
            })
       .def("create_assume",
            [](TritonOpBuilder &self, Value &condition) {
              self.create<LLVM::AssumeOp>(condition);
            })
-      // Undef
-      .def("create_undef",
+      .def("create_poison",
            [](TritonOpBuilder &self, Type &type) -> Value {
-             return self.create<LLVM::UndefOp>(type);
+             return self.create<ub::PoisonOp>(type);
            })
       .def("create_histogram",
            [](TritonOpBuilder &self, Value operand, int numBins) -> Value {
