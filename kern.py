@@ -266,13 +266,19 @@ module attributes {"triton_gpu.num-ctas" = 1 : i32, "triton_gpu.num-warps" = 8 :
     %49 = tt.broadcast %48 : tensor<1x128xi64, #blocked1> -> tensor<128x128xi64, #blocked1> 
     %74 = amdgpu.view_slice %40[0, 32] [256, 32] [1, 1] : tensor<256x128x!tt.ptr<f16>, #blocked> to tensor<256x32x!tt.ptr<f16>, #blocked> 
     %75 = tt.load %74 : tensor<256x32x!tt.ptr<f16>, #blocked> 
+    %105 = triton_gpu.local_alloc %75 : (tensor<256x32xf16, #blocked>) -> !tt.memdesc<256x32xf16, #shared, #triton_gpu.shared_memory> 
+    %106 = triton_gpu.local_load %105 : !tt.memdesc<256x32xf16, #shared, #triton_gpu.shared_memory> -> tensor<256x32xf16, #triton_gpu.dot_op<{opIdx = 0, parent = #mma, kWidth = 4}>> 
     %63 = amdgpu.view_slice %40[0, 0] [256, 32] [1, 1] : tensor<256x128x!tt.ptr<f16>, #blocked> to tensor<256x32x!tt.ptr<f16>, #blocked> 
     %64 = tt.load %63 : tensor<256x32x!tt.ptr<f16>, #blocked> 
+    %100 = triton_gpu.local_alloc %64 : (tensor<256x32xf16, #blocked>) -> !tt.memdesc<256x32xf16, #shared, #triton_gpu.shared_memory> 
+    %101 = triton_gpu.local_load %100 : !tt.memdesc<256x32xf16, #shared, #triton_gpu.shared_memory> -> tensor<256x32xf16, #triton_gpu.dot_op<{opIdx = 0, parent = #mma, kWidth = 4}>> 
     %78 = amdgpu.view_slice %40[0, 64] [256, 32] [1, 1] : tensor<256x128x!tt.ptr<f16>, #blocked> to tensor<256x32x!tt.ptr<f16>, #blocked> 
     %79 = tt.load %78 : tensor<256x32x!tt.ptr<f16>, #blocked> 
+    %110 = triton_gpu.local_alloc %79 : (tensor<256x32xf16, #blocked>) -> !tt.memdesc<256x32xf16, #shared, #triton_gpu.shared_memory> 
+    %111 = triton_gpu.local_load %110 : !tt.memdesc<256x32xf16, #shared, #triton_gpu.shared_memory> -> tensor<256x32xf16, #triton_gpu.dot_op<{opIdx = 0, parent = #mma, kWidth = 4}>> 
     %82 = amdgpu.view_slice %40[0, 96] [256, 32] [1, 1] : tensor<256x128x!tt.ptr<f16>, #blocked> to tensor<256x32x!tt.ptr<f16>, #blocked> 
     %83 = tt.load %82 : tensor<256x32x!tt.ptr<f16>, #blocked> 
-      %50:5 = scf.for %arg21 = %c0_i32 to %arg20 step %c128_i32 iter_args(%arg22 = %cst_2, %arg23 = %cst_0, %arg24 = %cst_1, %arg25 = %c0_i64, %arg26 = %c0_i64) -> (tensor<256x128xf32, #mma>, tensor<256xf32, #triton_gpu.slice<{dim = 1, parent = #mma}>>, tensor<256xf32, #triton_gpu.slice<{dim = 1, parent = #mma}>>, i64, i64)  : i32 {
+    %50:5 = scf.for %arg21 = %c0_i32 to %arg20 step %c128_i32 iter_args(%arg22 = %cst_2, %arg23 = %cst_0, %arg24 = %cst_1, %arg25 = %c0_i64, %arg26 = %c0_i64) -> (tensor<256x128xf32, #mma>, tensor<256xf32, #triton_gpu.slice<{dim = 1, parent = #mma}>>, tensor<256xf32, #triton_gpu.slice<{dim = 1, parent = #mma}>>, i64, i64)  : i32 {
       %65 = tt.splat %arg26 : i64 -> tensor<128xi64, #triton_gpu.slice<{dim = 0, parent = #blocked1}>> 
       %66 = arith.addi %65, %32 : tensor<128xi64, #triton_gpu.slice<{dim = 0, parent = #blocked1}>> 
       %67 = tt.expand_dims %66 {axis = 0 : i32} : tensor<128xi64, #triton_gpu.slice<{dim = 0, parent = #blocked1}>> -> tensor<1x128xi64, #blocked1> 
@@ -282,26 +288,20 @@ module attributes {"triton_gpu.num-ctas" = 1 : i32, "triton_gpu.num-warps" = 8 :
       %71 = tt.addptr %41, %70 : tensor<128x128x!tt.ptr<f16>, #blocked1>, tensor<128x128xi64, #blocked1> 
       %72 = amdgpu.view_slice %71[0, 0] [32, 128] [1, 1] : tensor<128x128x!tt.ptr<f16>, #blocked1> to tensor<32x128x!tt.ptr<f16>, #blocked1> 
       %73 = tt.load %72 : tensor<32x128x!tt.ptr<f16>, #blocked1>
-      %76 = amdgpu.view_slice %71[32, 0] [32, 128] [1, 1] : tensor<128x128x!tt.ptr<f16>, #blocked1> to tensor<32x128x!tt.ptr<f16>, #blocked1> 
-      %77 = tt.load %76 : tensor<32x128x!tt.ptr<f16>, #blocked1> 
-      %100 = triton_gpu.local_alloc %64 : (tensor<256x32xf16, #blocked>) -> !tt.memdesc<256x32xf16, #shared, #triton_gpu.shared_memory> 
-      %101 = triton_gpu.local_load %100 : !tt.memdesc<256x32xf16, #shared, #triton_gpu.shared_memory> -> tensor<256x32xf16, #triton_gpu.dot_op<{opIdx = 0, parent = #mma, kWidth = 4}>> 
       %102 = triton_gpu.local_alloc %73 : (tensor<32x128xf16, #blocked1>) -> !tt.memdesc<32x128xf16, #shared1, #triton_gpu.shared_memory> 
       %103 = triton_gpu.local_load %102 : !tt.memdesc<32x128xf16, #shared1, #triton_gpu.shared_memory> -> tensor<32x128xf16, #triton_gpu.dot_op<{opIdx = 1, parent = #mma, kWidth = 4}>> 
-      %104 = tt.dot %101, %103, %cst_2 : tensor<256x32xf16, #triton_gpu.dot_op<{opIdx = 0, parent = #mma, kWidth = 4}>> * tensor<32x128xf16, #triton_gpu.dot_op<{opIdx = 1, parent = #mma, kWidth = 4}>> -> tensor<256x128xf32, #mma> 
-      amdgpu.instruction_sched_hint 
-      %105 = triton_gpu.local_alloc %75 : (tensor<256x32xf16, #blocked>) -> !tt.memdesc<256x32xf16, #shared, #triton_gpu.shared_memory> 
-      %106 = triton_gpu.local_load %105 : !tt.memdesc<256x32xf16, #shared, #triton_gpu.shared_memory> -> tensor<256x32xf16, #triton_gpu.dot_op<{opIdx = 0, parent = #mma, kWidth = 4}>> 
+      %76 = amdgpu.view_slice %71[32, 0] [32, 128] [1, 1] : tensor<128x128x!tt.ptr<f16>, #blocked1> to tensor<32x128x!tt.ptr<f16>, #blocked1> 
+      %77 = tt.load %76 : tensor<32x128x!tt.ptr<f16>, #blocked1> 
       %107 = triton_gpu.local_alloc %77 : (tensor<32x128xf16, #blocked1>) -> !tt.memdesc<32x128xf16, #shared1, #triton_gpu.shared_memory> 
       %108 = triton_gpu.local_load %107 : !tt.memdesc<32x128xf16, #shared1, #triton_gpu.shared_memory> -> tensor<32x128xf16, #triton_gpu.dot_op<{opIdx = 1, parent = #mma, kWidth = 4}>> 
+      %104 = tt.dot %101, %103, %cst_2 : tensor<256x32xf16, #triton_gpu.dot_op<{opIdx = 0, parent = #mma, kWidth = 4}>> * tensor<32x128xf16, #triton_gpu.dot_op<{opIdx = 1, parent = #mma, kWidth = 4}>> -> tensor<256x128xf32, #mma> 
+      amdgpu.instruction_sched_hint 
       %80 = amdgpu.view_slice %71[64, 0] [32, 128] [1, 1] : tensor<128x128x!tt.ptr<f16>, #blocked1> to tensor<32x128x!tt.ptr<f16>, #blocked1> 
       %81 = tt.load %80 : tensor<32x128x!tt.ptr<f16>, #blocked1> 
       %109 = tt.dot %106, %108, %104 : tensor<256x32xf16, #triton_gpu.dot_op<{opIdx = 0, parent = #mma, kWidth = 4}>> * tensor<32x128xf16, #triton_gpu.dot_op<{opIdx = 1, parent = #mma, kWidth = 4}>> -> tensor<256x128xf32, #mma> 
       amdgpu.instruction_sched_hint 
       %84 = amdgpu.view_slice %71[96, 0] [32, 128] [1, 1] : tensor<128x128x!tt.ptr<f16>, #blocked1> to tensor<32x128x!tt.ptr<f16>, #blocked1> 
       %85 = tt.load %84 : tensor<32x128x!tt.ptr<f16>, #blocked1> 
-      %110 = triton_gpu.local_alloc %79 : (tensor<256x32xf16, #blocked>) -> !tt.memdesc<256x32xf16, #shared, #triton_gpu.shared_memory> 
-      %111 = triton_gpu.local_load %110 : !tt.memdesc<256x32xf16, #shared, #triton_gpu.shared_memory> -> tensor<256x32xf16, #triton_gpu.dot_op<{opIdx = 0, parent = #mma, kWidth = 4}>> 
       %112 = triton_gpu.local_alloc %81 : (tensor<32x128xf16, #blocked1>) -> !tt.memdesc<32x128xf16, #shared1, #triton_gpu.shared_memory> 
       %113 = triton_gpu.local_load %112 : !tt.memdesc<32x128xf16, #shared1, #triton_gpu.shared_memory> -> tensor<32x128xf16, #triton_gpu.dot_op<{opIdx = 1, parent = #mma, kWidth = 4}>> 
       %114 = tt.dot %111, %113, %109 : tensor<256x32xf16, #triton_gpu.dot_op<{opIdx = 0, parent = #mma, kWidth = 4}>> * tensor<32x128xf16, #triton_gpu.dot_op<{opIdx = 1, parent = #mma, kWidth = 4}>> -> tensor<256x128xf32, #mma> 
