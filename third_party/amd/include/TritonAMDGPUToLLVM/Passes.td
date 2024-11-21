@@ -99,5 +99,13 @@ def LowerInstructionSchedHints : Pass<"lower-insert-instruction-sched-hints", "m
     ];
 }
 
+def TritonAMDGPUFAReorderInstructions: Pass<"tritonamd-fa-reorder-instructions", "mlir::ModuleOp"> {
+  let summary = "Reorder instructions";
+
+  let constructor = "mlir::triton::AMD::createTritonAMDGPUFAReorderInstructions()";
+  
+  let dependentDialects = ["mlir::triton::gpu::TritonGPUDialect",
+                           "mlir::triton::amdgpu::TritonAMDGPUDialect"];
+}
 
 #endif

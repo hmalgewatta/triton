@@ -87,6 +87,15 @@ struct ViewSliceOpConversion : public ConvertOpToLLVMPattern<tta::ViewSliceOp> {
 
     // The diagram above illustrates the graphical representation of the
     // skipElems, tensorStride, and lastIdx variables.
+    // llvm::outs() << "=========================================" << "]\n";
+    // llvm::outs() << "srcShape: [" << srcShape[0] << "," << srcShape[1] << "]\n";
+    // // llvm::outs() << "warpsPerCTA: [" << dyn_cast<BlockedEncodingAttr>(srcLayout).getWarpsPerCTA()[0] << "," << dyn_cast<BlockedEncodingAttr>(srcLayout).getWarpsPerCTA()[1] << "]\n";
+    // llvm::outs() << "elemsPerThread: [" << elemsPerThread[0] << "," << elemsPerThread[1] << "]\n";
+    // llvm::outs() << "sizePerThread: [" << sizePerThread[0] << "," << sizePerThread[1] << "]\n";
+    // llvm::outs() << "shapePerCTA: [" << shapePerCTA[0] << "," << shapePerCTA[1] << "]\n";
+    // llvm::outs() << "CTAOffsets: [" << CTAOffsets[0] << "," << CTAOffsets[1] << "]\n";
+    // llvm::outs() << "CTASizes: [" << CTASizes[0] << "," << CTASizes[1] << "]\n";
+    // llvm::outs() << "CTAPerShape: [" << CTAPerShape[0] << "," << CTAPerShape[1] << "]\n";
     auto skipElems = CTAOffsets[order[1]] *
                          (elemsPerThread[order[0]] * sizePerThread[order[1]]) +
                      CTAOffsets[order[0]] * totalSizePerThread;
@@ -97,6 +106,12 @@ struct ViewSliceOpConversion : public ConvertOpToLLVMPattern<tta::ViewSliceOp> {
             elemsPerThread[order[0]] * sizePerThread[order[1]] +
         (CTAOffsets[order[0]] + CTASizes[order[0]]) * totalSizePerThread;
 
+    
+    // llvm::outs() << "skipElems: " << skipElems << "\n";
+    // llvm::outs() << "tensorStride: " << tensorStride << "\n";
+    // llvm::outs() << "lastIdx: " << lastIdx << "\n";
+    // llvm::outs() << "totalSizePerThread: " << totalSizePerThread << "\n";
+    // llvm::outs() << "****************************************" << "]\n";
     assert(lastIdx <= vals.size());
 
     SmallVector<Value> resultVals;

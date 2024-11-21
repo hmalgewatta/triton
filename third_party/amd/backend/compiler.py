@@ -216,6 +216,7 @@ class HIPBackend(BaseBackend):
         passes.ttgpuir.add_remove_layout_conversions(pm)
         amd.passes.ttgpuir.add_optimize_epilogue(pm)
         amd.passes.ttgpuir.add_dot_slicing_pass(pm, options.tile_k_size)
+        amd.passes.ttgpuir.add_tritonamdgpu_reorder_instructions(pm)
         passes.ttgpuir.add_optimize_dot_operands(pm, True)
         if amd.has_matrix_core_feature(options.arch):
             assert options.num_stages != 0, ("Triton AMD backend pipeliner has been updated. "

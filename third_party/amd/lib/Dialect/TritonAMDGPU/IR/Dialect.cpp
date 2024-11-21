@@ -57,6 +57,7 @@ LogicalResult ViewSliceOp::verify() {
   auto srcElementType = dyn_cast<RankedTensorType>(srcTy).getElementType();
   auto resultTy = getResult().getType();
   auto resultLayout = resultTy.getEncoding();
+  auto order = triton::gpu::getOrder(srcLayout);
   auto resultElementType =
       dyn_cast<RankedTensorType>(resultTy).getElementType();
 
@@ -78,8 +79,10 @@ LogicalResult ViewSliceOp::verify() {
   // ViewSlice only supports slicing where offsets and sizes are multiples of
   // shapePerCTA. This condition ensures that slice has the same layout as the
   // original tensor.
+  // llvm::outs() << "LOC VIEWSLICE " << getLoc() << "\n";
   // llvm::outs() << "src " << srcShape[0] << "," <<  srcShape[1] << "\n";
-  // llvm::outs() << "shapePerCTA " << shapePerCTA[0] << "," <<  shapePerCTA[1]
+  // llvm::outs() << "src " << order[0] << "," <<  order[1] << "\n";
+  // llvm::outs() << "shapePerCTA " << shapePerCTA[0] << "," <<  shapePerCTA[1] << "\n" << "shapePerCTA " << shapePerCTA[order[0]] << "," <<  shapePerCTA[order[1]]
   // << "\n"; llvm::outs() << "offsets " << offsets[0] << "," <<  offsets[1] <<
   // "\n"; llvm::outs() << "sizes " << sizes[0] << "," <<  sizes[1] << "\n";
 

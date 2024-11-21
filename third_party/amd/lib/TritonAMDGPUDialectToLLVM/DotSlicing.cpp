@@ -141,12 +141,26 @@ struct TritonAMDGPUDotSlicingPass
     for (auto i = 0; i < firstOpToSlice->getOperands().size(); i++) {
       auto arg = firstOpToSlice->getOperand(i);
       if (auto tensorType = dyn_cast<TensorOrMemDesc>(arg.getType())) {
+        
+        // llvm::outs() << dotOp.getLoc() << "\n";
+      //   if (arg.getEncoding() != tensorType.getEncoding()) {
+      //     auto ty = cast<RankedTensorType>(arg.getType());
+      // auto newTy =
+      //     RankedTensorType::get(ty.getShape(), ty.getElementType(), encoding);
+      // auto cvt =
+      //     builder.create<ttg::ConvertLayoutOp>(loadOp->getLoc(), newTy, src);
+      //   }
+        
         auto slice = builder.create<tta::ViewSliceOp>(
             dotOp.getLoc(),
             RankedTensorType::get(sliceSizes, tensorType.getElementType(),
                                   tensorType.getEncoding()),
             arg, ValueRange({}), ValueRange({}), ValueRange({}), sliceOffsets,
             sliceSizes, sliceStrides);
+        // llvm::outs() <<  tensorType.getElementType()  << "<::>" << 
+        //                           tensorType.getEncoding()  << "<::>" << 
+        //     arg  << "<::>" <<  sliceOffsets[0] << "," << sliceOffsets[1] << "," << "<::>" << 
+        //     sliceSizes[0] << "," << sliceSizes[1] << "<::>" << sliceStrides[0]  << "," << sliceStrides[1]  <<"\n";
         mapping.map(arg, slice);
         if (i == 0)
           viewPtr = slice;
@@ -190,8 +204,7 @@ struct TritonAMDGPUDotSlicingPass
       }
       // llvm::outs() << currOp->getName() << "\n";
       assert(llvm::isa<tt::LoadOp>(currOp) ||
-             llvm::isa<ttg::ConvertLayoutOp>(currOp) ||
-             llvm::isa<ttg::LocalAllocOp>(currOp) || isElementwiseOp(currOp));
+             llvm::isa<ttg::ConvertLayoutOp>(currOp) || isElementwiseOp(currOp));
 
       // If currOp has more then one user, proceed with the one that is "on a
       // path" of dot operand calculation. We expect there is only one such
@@ -216,7 +229,7 @@ struct TritonAMDGPUDotSlicingPass
         auto slicedTy = RankedTensorType::get(
             sliceSizes, nonSlicedOperandTy.getElementType(),
             nonSlicedOperandTy.getEncoding());
-
+        // llvm::outs() << nonSlicedOperand->getLoc() << "\n";
         auto slicedOperand = builder.create<tta::ViewSliceOp>(
             nonSlicedOperand->getLoc(), slicedTy,
             nonSlicedOperand->getResults()[0], ValueRange({}), ValueRange({}),
@@ -228,8 +241,7 @@ struct TritonAMDGPUDotSlicingPass
     }
 
     // llvm::outs() << "converted " << slicedOp->getName() << "\n";
-    assert(llvm::isa<ttg::ConvertLayoutOp>(slicedOp) ||
-           llvm::isa<ttg::LocalLoadOp>(slicedOp));
+    assert(llvm::isa<ttg::ConvertLayoutOp>(slicedOp));
     return slicedOp->getResults()[0];
   }
 
@@ -247,6 +259,7 @@ struct TritonAMDGPUDotSlicingPass
     // operands' type, we do this by changing the outputs' type of
     // `make_tensor_ptr`
     SmallVector<Value, 4> newArgs;
+    // llvm::outs() <<   op->getLoc() << "\n";
     for (auto operand : op->getOperands()) {
       auto tensorType = dyn_cast<TensorOrMemDesc>(operand.getType());
       if (tensorType &&
@@ -291,8 +304,17 @@ struct TritonAMDGPUDotSlicingPass
     auto sizePerThread = blockedEncoding.getSizePerThread();
     auto threadsPerWarp = blockedEncoding.getThreadsPerWarp();
     auto warpsPerCTA = blockedEncoding.getWarpsPerCTA();
+    auto order = blockedEncoding.getOrder();
     ModuleOp mod = getOperation();
 
+    // llvm::outs() << "setBlockLayout*********************** " << operandIdx << "\n";
+    // llvm::outs() << "shaperPerCTA: " << shapePerCTA[0] << "," << shapePerCTA[1] << "\n";
+    // llvm::outs() << "sizePerThread: " << sizePerThread[0] << "," << sizePerThread[1] << "\n";
+    // llvm::outs() << "threadsPerWarp: " << threadsPerWarp[0] << "," << threadsPerWarp[1] << "\n";
+    // llvm::outs() << "warpsPerCTA: " << warpsPerCTA[0] << "," << warpsPerCTA[1] << "\n";
+    // llvm::outs() << "order: " << order[0] << "," << order[1] << "\n";
+    // llvm::outs() << "shape: " << shape[0] << "," << shape[1] << "\n";
+    // llvm::outs() << firstOpToSlice->getLoc() << "\n";
     // clang-format off
     //
     // Current layout can be used for slicing as is.
@@ -316,6 +338,7 @@ struct TritonAMDGPUDotSlicingPass
                0) {
       SmallVector<unsigned> newWarpsPerCTA(2, warpsPerCTA[0] * warpsPerCTA[1]);
       newWarpsPerCTA[1 - operandIdx] = 1;
+    // llvm::outs() << "newWarpsPerCTA: " << newWarpsPerCTA[0] << "," << newWarpsPerCTA[1] << "\n";
       auto newBlockedEncoding = ttg::BlockedEncodingAttr::get(
           mod.getContext(), sizePerThread, threadsPerWarp, newWarpsPerCTA,
           blockedEncoding.getOrder(), blockedEncoding.getCTALayout());
@@ -338,10 +361,17 @@ struct TritonAMDGPUDotSlicingPass
           (this->sliceKTile / sizePerThread[1 - operandIdx]);
       newThreadsPerWarp[1 - operandIdx] =
           this->sliceKTile / sizePerThread[1 - operandIdx];
-
+    // llvm::outs() << "newWarpsPerCTA: " << newWarpsPerCTA[0] << "," << newWarpsPerCTA[1] << "\n";
+    // llvm::outs() << "newThreadsPerWarp: " << newThreadsPerWarp[0] << "," << newThreadsPerWarp[1] << "\n";
+      SmallVector<unsigned> newOrder(order.size());
+      for (int i = 0; i < order.size(); ++i) {
+        newOrder[i] = (order[i] == 1 ? 0 : 1);
+      }
+    // llvm::outs() << "newOrder: " << newOrder[0] << "," << newOrder[1] << "\n";
+    // llvm::outs() << "getCTALayout: " << blockedEncoding.getCTALayout() << "\n";
       auto newBlockedEncoding = ttg::BlockedEncodingAttr::get(
           mod.getContext(), sizePerThread, newThreadsPerWarp, newWarpsPerCTA,
-          blockedEncoding.getOrder(), blockedEncoding.getCTALayout());
+          newOrder, blockedEncoding.getCTALayout());
       convertLayout(newBlockedEncoding, firstOpToSlice);
       // In other cases, the sizePerThread parameter would need to be changed,
       // which can affect coalescing and thus potentially decrease performance.
@@ -383,6 +413,8 @@ struct TritonAMDGPUDotSlicingPass
       if (std::find(forwardSlices.begin(), forwardSlices.end(),
                     dotOperand.getDefiningOp()) != forwardSlices.end()) {
         loadOpsVec.push_back(loadOp);
+      // llvm::outs() << "Visiting op '" << loadOp.getLoc() << "' with "
+      //            << operandIdx << " operands:\n";
       }
     });
 
@@ -425,7 +457,7 @@ struct TritonAMDGPUDotSlicingPass
 
   bool dependsOnSplat(tt::DotOp dotOp, int operandIdx) {
     SetVector<Operation *> bwdSlices;
-    SmallVector<Operation *> filteredSlices;
+    SmallVector<Operation *> filteredSlices, filteredLoads;
     BackwardSliceOptions opt;
     opt.omitBlockArguments = true;
     Operation *operand = dotOp.getOperand(operandIdx).getDefiningOp();
@@ -433,6 +465,11 @@ struct TritonAMDGPUDotSlicingPass
     std::copy_if(bwdSlices.begin(), bwdSlices.end(),
                  std::back_inserter(filteredSlices),
                  [](Operation *op) { return isa<tt::SplatOp>(op); });
+    std::copy_if(bwdSlices.begin(), bwdSlices.end(),
+                 std::back_inserter(filteredLoads),
+                 [](Operation *op) { return isa<tt::LoadOp>(op); });
+    if (!filteredLoads.empty())
+      return false;
     if (filteredSlices.empty()) {
       return false;
     }
@@ -465,11 +502,12 @@ struct TritonAMDGPUDotSlicingPass
       opToErase->erase();
     }
   }
-
+// 
   Operation *getFirstOpToSlice(tt::DotOp dotOp, int operandIdx) {
     if (dependsOnPreviousDot(dotOp, operandIdx)) {
       return dotOp.getOperand(operandIdx).getDefiningOp();
-    } else if (dependsOnSplat(dotOp, operandIdx)) {
+    } 
+    else if (dependsOnSplat(dotOp, operandIdx)) {
       return dotOp.getOperand(operandIdx).getDefiningOp();
     }
     return getLoadInst(dotOp, operandIdx);

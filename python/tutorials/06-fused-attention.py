@@ -453,7 +453,7 @@ class _attention(torch.autograd.Function):
         # Tuning for AMD target
         if is_hip():
             waves_per_eu = 3 if HEAD_DIM_K <= 64 else 2
-            extra_kern_args = {"waves_per_eu": waves_per_eu, "allow_flush_denorm": True}
+            extra_kern_args = {"waves_per_eu": waves_per_eu, "tile_k_size": 32}
 
         grid = lambda args: (triton.cdiv(q.shape[2], args["BLOCK_M"]), q.shape[0] * q.shape[1], 1)
         M = torch.empty((q.shape[0], q.shape[1], q.shape[2]), device=q.device, dtype=torch.float32)

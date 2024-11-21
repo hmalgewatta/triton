@@ -86,6 +86,12 @@ SmallVector<unsigned, 4> argSort(const SmallVector<int64_t> &arr) {
   return ret;
 }
 
+std::optional<int> getWSRoleId(Operation *op) {
+  if (!op->hasAttr("agent.mutex_role"))
+    return std::nullopt;
+  return op->getAttrOfType<IntegerAttr>("agent.mutex_role").getInt();
+}
+
 Value getMemAccessPtr(Operation *op) {
   if (auto ld = dyn_cast<triton::LoadOp>(op))
     return ld.getPtr();

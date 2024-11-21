@@ -36,6 +36,8 @@ createOptimizeLDSUsagePass(StringRef arch, int32_t customLDSLimit = 0);
 /// @return created pass
 std::unique_ptr<OperationPass<ModuleOp>>
 createTritonAMDGPUDotSlicingPass(int sliceKTile = 0);
+std::unique_ptr<OperationPass<ModuleOp>>
+createTritonAMDGPUFAReorderInstructions();
 } // namespace AMD
 
 std::unique_ptr<OperationPass<ModuleOp>>
