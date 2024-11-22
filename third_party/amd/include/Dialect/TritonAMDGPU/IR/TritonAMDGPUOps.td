@@ -38,64 +38,6 @@ include "TritonAMDGPUAttrDefs.td"
 include "mlir/Interfaces/SideEffectInterfaces.td" // Pure
 include "mlir/Interfaces/ViewLikeInterface.td" // OffsetSizeAndStrideOpInterface
 
-class TritonAMDGPU_Op<string mnemonic, list<Trait> traits = []> :
-    Op<TritonAMDGPU_Dialect, mnemonic, traits>;
-
-def TritonAMDGPU_ViewSliceOp : TritonAMDGPU_Op<"view_slice",
-                                [AttrSizedOperandSegments,
-                                 Pure,
-                                 OffsetSizeAndStrideOpInterface
-                                 ]> {
-  let summary = "view slice operation";
-  let description = [{
-    Represents view of the slice of the tensor in registers. However, unlike 'memdesc_subview' which provides a view in shared memory,
-    'view_slice' specifically slices within registers.
-    Slice of the tensor is required to have the same layout as the original tensor.
-    }];
-
-  let arguments = (ins
-    AnyRankedTensor:$source,
-    Variadic<I32>:$offsets,
-    Variadic<I32>:$sizes,
-    Variadic<I32>:$strides,
-    DenseI64ArrayAttr:$static_offsets,
-    DenseI64ArrayAttr:$static_sizes,
-    DenseI64ArrayAttr:$static_strides
-  );
-  let results = (outs AnyRankedTensor:$result);
-
-  let builders = [
-    // Build a ViewSliceOp with mixed static and dynamic entries and the same
-    // result type
-    OpBuilder<(ins "RankedTensorType":$resultType, "Value":$source,
-      "ArrayRef<OpFoldResult>":$offsets, "ArrayRef<OpFoldResult>":$sizes,
-      "ArrayRef<OpFoldResult>":$strides,
-      CArg<"ArrayRef<NamedAttribute>", "{}">:$attrs)>,
-  ];
-
-  let extraClassDeclaration = [{
-    /// Return the number of leading operands before the `offsets`, `sizes` and
-    /// and `strides` operands.
-    static unsigned getOffsetSizeAndStrideStartOperandIndex() { return 1; }
-
-    std::array<unsigned, 3> getArrayAttrMaxRanks() {
-      unsigned rank = getSource().getType().getRank();
-      return {rank, rank, rank};
-    }
-  }];
-
-  let assemblyFormat = [{
-    $source ``
-    custom<DynamicIndexList>($offsets, $static_offsets)
-    custom<DynamicIndexList>($sizes, $static_sizes)
-    custom<DynamicIndexList>($strides, $static_strides)
-    attr-dict `:` type($source) `to` type($result)
-  }];
-
-  let hasVerifier = 1;
-}
-
-
 class TT_AMDGPU_Op<string mnemonic, list<Trait> traits = []> :
     Op<TritonAMDGPU_Dialect, mnemonic, !listconcat(traits, [])> {
 }
@@ -152,12 +94,12 @@ def ExtractSliceOp
       DenseI64ArrayAttr:$static_offsets);
   let results = (outs AnyRankedTensor:$result);
 
-  let builders = [
-      // Build a ExtractSliceOp with static offsets and the same result type
-      OpBuilder<(ins "RankedTensorType":$resultType,
-          "Value":$source,
-          "ArrayRef<int64_t>": $static_offsets)>,
-  ];
+  // let builders = [
+  //    // Build a ExtractSliceOp with static offsets and the same result type
+  //    OpBuilder<(ins "RankedTensorType":$result,
+  //        "Value":$source,
+  //        "ArrayRef<int64_t>": $static_offsets)>,
+  // ];
 
   let extraClassDeclaration = [{
     std::array<unsigned, 3> getArrayAttrMaxRanks() {

@@ -116,7 +116,7 @@ struct TritonAMDGPUDotSlicingPass
                             OpBuilder builder,
                             SmallVector<Operation *> &eraseOps) {
     auto dotOperand = dotOp.getOperand(operandIdx);
-    auto dotOperandTy = cast<TensorOrMemDesc>(dotOp.getType());
+    auto dotOperandTy = cast<ttg::TensorOrMemDesc>(dotOp.getType());
 
     SmallVector<int64_t> sliceSizes;
     SmallVector<int64_t> sliceOffsets;
@@ -137,10 +137,10 @@ struct TritonAMDGPUDotSlicingPass
     // Begin with the load instruction and proceed to slice the operations
     // along the execution path of the dotOperand.
     IRMapping mapping;
-    tta::ViewSliceOp viewPtr;
+    tta::ExtractSliceOp viewPtr;
     for (auto i = 0; i < firstOpToSlice->getOperands().size(); i++) {
       auto arg = firstOpToSlice->getOperand(i);
-      if (auto tensorType = dyn_cast<TensorOrMemDesc>(arg.getType())) {
+      if (auto tensorType = dyn_cast<ttg::TensorOrMemDesc>(arg.getType())) {
         
         // llvm::outs() << dotOp.getLoc() << "\n";
       //   if (arg.getEncoding() != tensorType.getEncoding()) {
@@ -150,17 +150,12 @@ struct TritonAMDGPUDotSlicingPass
       // auto cvt =
       //     builder.create<ttg::ConvertLayoutOp>(loadOp->getLoc(), newTy, src);
       //   }
-        
-        auto slice = builder.create<tta::ViewSliceOp>(
+        ArrayRef<int64_t> staticOffsets = sliceOffsets;
+        auto slice = builder.create<tta::ExtractSliceOp>(
             dotOp.getLoc(),
             RankedTensorType::get(sliceSizes, tensorType.getElementType(),
                                   tensorType.getEncoding()),
-            arg, ValueRange({}), ValueRange({}), ValueRange({}), sliceOffsets,
-            sliceSizes, sliceStrides);
-        // llvm::outs() <<  tensorType.getElementType()  << "<::>" << 
-        //                           tensorType.getEncoding()  << "<::>" << 
-        //     arg  << "<::>" <<  sliceOffsets[0] << "," << sliceOffsets[1] << "," << "<::>" << 
-        //     sliceSizes[0] << "," << sliceSizes[1] << "<::>" << sliceStrides[0]  << "," << sliceStrides[1]  <<"\n";
+            arg, staticOffsets);
         mapping.map(arg, slice);
         if (i == 0)
           viewPtr = slice;
@@ -183,8 +178,8 @@ struct TritonAMDGPUDotSlicingPass
            llvm::zip(currOp->getResults(), slicedOp->getResults())) {
         // llvm::outs() << "Type: " << currRes.getType() << ":" <<
         // slicedRes.getType() << ":" << viewPtr.getType() << "\n";
-        if (auto memdescTy = dyn_cast<triton::MemDescType>(currRes.getType())) {
-          auto slicedType = triton::MemDescType::get(
+        if (auto memdescTy = dyn_cast<ttg::MemDescType>(currRes.getType())) {
+          auto slicedType = ttg::MemDescType::get(
               viewPtr.getType().getShape(), memdescTy.getElementType(),
               memdescTy.getEncoding(), memdescTy.getMemorySpace(),
               memdescTy.getMutableMemory());
@@ -224,16 +219,17 @@ struct TritonAMDGPUDotSlicingPass
           continue;
         }
         auto nonSlicedOperandTy =
-            cast<TensorOrMemDesc>(nonSlicedOperand->getResults()[0].getType());
+            cast<ttg::TensorOrMemDesc>(nonSlicedOperand->getResults()[0].getType());
 
         auto slicedTy = RankedTensorType::get(
             sliceSizes, nonSlicedOperandTy.getElementType(),
             nonSlicedOperandTy.getEncoding());
         // llvm::outs() << nonSlicedOperand->getLoc() << "\n";
-        auto slicedOperand = builder.create<tta::ViewSliceOp>(
+        
+        ArrayRef<int64_t> staticOffsets = sliceOffsets;
+        auto slicedOperand = builder.create<tta::ExtractSliceOp>(
             nonSlicedOperand->getLoc(), slicedTy,
-            nonSlicedOperand->getResults()[0], ValueRange({}), ValueRange({}),
-            ValueRange({}), sliceOffsets, sliceSizes, sliceStrides);
+            operandVal, staticOffsets);
         mapping.map(nonSlicedOperand->getResults()[0], slicedOperand);
       }
 
@@ -246,7 +242,7 @@ struct TritonAMDGPUDotSlicingPass
   }
 
   static Type getNewType(Type type, Attribute encoding) {
-    TensorOrMemDesc tensorType = cast<TensorOrMemDesc>(type);
+    ttg::TensorOrMemDesc tensorType = cast<ttg::TensorOrMemDesc>(type);
     return RankedTensorType::get(tensorType.getShape(),
                                  tensorType.getElementType(), encoding);
   }
@@ -261,7 +257,7 @@ struct TritonAMDGPUDotSlicingPass
     SmallVector<Value, 4> newArgs;
     // llvm::outs() <<   op->getLoc() << "\n";
     for (auto operand : op->getOperands()) {
-      auto tensorType = dyn_cast<TensorOrMemDesc>(operand.getType());
+      auto tensorType = dyn_cast<ttg::TensorOrMemDesc>(operand.getType());
       if (tensorType &&
           !isa<ttg::SharedEncodingAttr>(tensorType.getEncoding())) {
         Type newType = getNewType(tensorType, encoding);
@@ -300,7 +296,7 @@ struct TritonAMDGPUDotSlicingPass
   bool setBlockedLayout(Operation *firstOpToSlice, ArrayRef<long> shape,
                         ttg::BlockedEncodingAttr blockedEncoding,
                         int operandIdx) {
-    auto shapePerCTA = ttg::getShapePerCTATile(blockedEncoding, shape);
+    auto shapePerCTA = ttg::getShapePerCTATile(blockedEncoding);
     auto sizePerThread = blockedEncoding.getSizePerThread();
     auto threadsPerWarp = blockedEncoding.getThreadsPerWarp();
     auto warpsPerCTA = blockedEncoding.getWarpsPerCTA();
@@ -384,7 +380,7 @@ struct TritonAMDGPUDotSlicingPass
   // Return true if layout was changed, else return false.
   bool setLayoutForSlicing(Operation *firstOpToSlice, int operandIdx) {
     auto firstOpToSliceTy =
-        cast<TensorOrMemDesc>(firstOpToSlice->getOperand(0).getType());
+        cast<ttg::TensorOrMemDesc>(firstOpToSlice->getOperand(0).getType());
     auto srcShape = firstOpToSliceTy.getShape();
     auto encoding = firstOpToSliceTy.getEncoding();
 
@@ -393,7 +389,7 @@ struct TritonAMDGPUDotSlicingPass
                               operandIdx);
     } else if (auto mfmaEncoding =
                    dyn_cast<ttg::AMDMfmaEncodingAttr>(encoding)) {
-      auto shapePerCTA = ttg::getShapePerCTATile(mfmaEncoding, srcShape);
+      auto shapePerCTA = ttg::getShapePerCTATile(mfmaEncoding);
       // TODO: Implement changing of mfma layout in case it is not suitable for
       // slicing (similar as in setBlockedLayout).
       assert(this->sliceKTile % shapePerCTA[1] == 0);
@@ -478,7 +474,7 @@ struct TritonAMDGPUDotSlicingPass
 
   bool shouldSliceDot(tt::DotOp dotOp) {
     auto dotOperand = dotOp.getOperand(0);
-    auto dotATy = cast<TensorOrMemDesc>(dotOperand.getType());
+    auto dotATy = cast<ttg::TensorOrMemDesc>(dotOperand.getType());
     auto kDim = dotATy.getShape()[1];
 
     if (this->sliceKTile == 0 || this->sliceKTile == kDim) {

@@ -197,6 +197,21 @@ public:
     return false;
   }
 
+  // bool isLocalRead(Operation *op) {
+  //   auto localAllocOp = dyn_cast<ttg::LocalAllocOp>(op);
+  //   if (!localAllocOp) {
+  //     return false;
+  //   }
+  //   auto srcType = cast<RankedTensorType>(localAllocOp.getOperand().getType());
+  //   auto dstType = cast<RankedTensorType>(localAllocOp.getResult().getType());
+  //   auto srcEncoding = srcType.getEncoding();
+  //   auto dstEncoding = dstType.getEncoding();
+  //   if (isa<triton::gpu::BlockedEncodingAttr>(srcEncoding) &&
+  //       isa<triton::gpu::SharedEncodingAttr>(dstEncoding))
+  //     return true;
+  //   return false;
+  // }
+
   bool isLDSRead(Operation *op) {
     auto cvtLayoutOp = dyn_cast<ttg::ConvertLayoutOp>(op);
     if (!cvtLayoutOp) {
@@ -228,7 +243,7 @@ public:
       opType = op;
     };
 
-    for (int i = 0; !isa<tta::ViewSliceOp>(currOp); i++) {
+    for (int i = 0; !isa<tta::ExtractSliceOp>(currOp); i++) {
       moveOp(currOp, operations[i]);
       moveBeforeOp = currOp;
       currOp = currOp->getOperand(0).getDefiningOp();
@@ -238,7 +253,7 @@ public:
 
   void initOperations(Operation *currOp, SmallVector<Operation *> &vec,
                       int operandIdx) {
-    while (!isa<tta::ViewSliceOp>(currOp)) {
+    while (!isa<tta::ExtractSliceOp>(currOp)) {
       if (operandIdx == 0) {
         vec.push_back(currOp);
       } else {
